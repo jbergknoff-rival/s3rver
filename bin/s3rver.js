@@ -48,6 +48,10 @@ program
     'Port of the http server',
     S3rver.defaultOptions.port,
   )
+  .option(
+    '--tls-port <n>',
+    'Optional extra port for running TLS',
+  )
   .option('-s, --silent', 'Suppress log messages', S3rver.defaultOptions.silent)
   .option(
     '--key <path>',
@@ -100,11 +104,29 @@ if (program.directory === undefined) {
   process.exit(1);
 }
 
-new S3rver(program).run((err, { address, port } = {}) => {
+// If --port and --tls-port are both specified, then run on `port` with HTTP
+// and run on `tlsPort` with HTTPS.
+if (program.port && program.tlsPort && program.key && program.cert) {
+  program.auxiliaryKey = program.key;
+  program.auxiliaryCert = program.cert;
+  delete program.key;
+  delete program.cert;
+}
+
+const s3rver = new S3rver(program);
+s3rver.run((err, { address, port } = {}) => {
   if (err) {
     console.error(err.message);
     process.exit(1);
   }
   console.log();
   console.log('S3rver listening on %s:%d', address, port);
+
+  if (program.tlsPort && program.auxiliaryKey && program.auxiliaryCert) {
+    s3rver.serverOptions.key = program.auxiliaryKey;
+    s3rver.serverOptions.cert = program.auxiliaryCert;
+    s3rver.listen(program.tlsPort, s3rver.serverOptions.address, () => {
+      console.log('S3rver also listening on %s:%d with TLS', address, program.tlsPort);
+    });
+  }
 });
